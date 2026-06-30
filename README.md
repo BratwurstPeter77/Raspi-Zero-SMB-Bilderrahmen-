@@ -1,128 +1,117 @@
-# Pi Zero W – SMB Foto-Slideshow mit CEC TV-Steuerung
+# 🖼️ Pi Zero W – SMB Slideshow + CEC TV-Steuerung
 
-Raspberry Pi Zero W zeigt Bilder von einem SMB-Share per HDMI als Slideshow an. Der angeschlossene TV wird jeden Morgen automatisch per HDMI-CEC eingeschaltet und abends wieder in Standby versetzt.
+Raspberry Pi Zero W zeigt Bilder von einem SMB-Share per HDMI als Slideshow an.  
+Der angeschlossene TV wird per HDMI-CEC automatisch ein- und ausgeschaltet.
 
-***
+## Features
 
-## Übersicht
-
-| Funktion | Technik |
-|---|---|
-| Bildanzeige | `fbi` (Linux Framebuffer, kein X11) |
-| Netzwerkfreigabe | SMB/CIFS via `/etc/fstab` |
-| TV Ein/Aus | `cec-client` (HDMI-CEC) |
-| Automatisierung | `cron` + `systemd` |
-| OS | Raspberry Pi OS Lite 32-bit |
-
-***
+- 📁 Bilder von SMB-Freigabe (NAS, Windows-PC, o.ä.)
+- 🖥️ Anzeige per `fbi` direkt über Linux-Framebuffer (kein X11, leichtgewichtig)
+- 🔄 Neue/gelöschte Bilder werden automatisch beim nächsten Durchlauf geladen
+- 📺 TV per HDMI-CEC zu konfigurierbaren Zeiten ein-/ausschalten
+- ⚙️ Vollautomatischer Start per systemd
 
 ## Voraussetzungen
 
-- Raspberry Pi Zero W (mit WLAN)
-- Micro-SD-Karte (mind. 8 GB)
-- Mini-HDMI → HDMI-Kabel
-- TV oder Monitor mit HDMI (**CEC optional** – Slideshow läuft auch ohne CEC-fähigem TV)
-- SMB-Freigabe im Heimnetz (NAS, Windows-PC, o.ä.)
+- Raspberry Pi Zero W
+- **Raspberry Pi OS Lite (32-bit)** – Bullseye oder Bookworm
+- HDMI-Verbindung zum TV/Monitor
+- SMB-Freigabe im Heimnetz
+
+> **CEC ist optional** – die Slideshow läuft auch ohne CEC-fähigem TV.
 
 ***
 
-## Empfohlenes OS
+## Installation
 
-**Raspberry Pi OS Lite (32-bit)** – Bullseye oder Bookworm
+### 1. Repo klonen
 
-Im Raspberry Pi Imager unter: *Raspberry Pi OS (other) → Raspberry Pi OS Lite (32-bit)*
-
-**Beim Flashen in den „Erweiterten Einstellungen" direkt setzen:**
-- WLAN SSID + Passwort
-- SSH aktivieren
-- Hostname (z.B. `bilderrahmen`)
-- User `pi` mit Passwort
-
-***
-
-## Dateien
-
-| Datei | Zweck |
-|---|---|
-| `setup_complete.sh` | Einmaliges Komplettsetup (alles in einem Schritt) |
-| `slideshow_fbi.sh` | Slideshow-Script (fbi, Framebuffer) |
-| `cec_tv.sh` | TV per CEC ein-/ausschalten |
-
-***
-
-## Schnellstart
-
-### 1. Werte anpassen
-
-Oben in `setup_complete.sh`:
 ```bash
-SMB_HOST="//192.168.1.100/fotos"   # IP deines NAS + Freigabename
+git clone https://github.com/DEIN-USERNAME/pi-slideshow.git
+cd pi-slideshow
+```
+
+### 2. Config anlegen
+
+```bash
+cp config.env.example config.env
+nano config.env
+```
+
+Folgende Werte eintragen:
+
+```bash
+SMB_HOST="//192.168.1.100/fotos"   # IP + Freigabename
 SMB_USER="deinuser"
 SMB_PASS="deinpasswort"
 SMB_DOMAIN="WORKGROUP"
-CEC_ON_HOUR="7"     # TV an um 07:00 Uhr
-CEC_OFF_HOUR="17"   # TV aus um 17:00 Uhr
+CEC_ON_HOUR="7"                    # TV an um 07:00
+CEC_OFF_HOUR="17"                  # TV aus um 17:00
+SLIDESHOW_INTERVAL="10"            # Sekunden pro Bild
 ```
 
-### 2. Alle Dateien auf den Pi kopieren
+### 3. Installieren
+
 ```bash
-scp setup_complete.sh slideshow_fbi.sh cec_tv.sh pi@bilderrahmen.local:~/
+sudo bash install.sh
 ```
 
-### 3. Setup ausführen
-```bash
-ssh pi@bilderrahmen.local
-chmod +x setup_complete.sh slideshow_fbi.sh cec_tv.sh
-sudo bash setup_complete.sh
-```
+### 4. Testen
 
-### 4. Testen (vor dem Reboot)
 ```bash
 # SMB-Mount prüfen
-sudo mount -a
-ls /mnt/smb-fotos
+sudo mount -a && ls /mnt/smb-fotos
 
-# CEC: Gerätescan (zeigt TV und Pi im HDMI-Bus)
+# CEC-Geräte scannen
 /home/pi/scripts/cec_tv.sh scan
 
-# CEC: TV manuell ein/aus testen
+# TV manuell ein/aus
 /home/pi/scripts/cec_tv.sh on
 /home/pi/scripts/cec_tv.sh off
-/home/pi/scripts/cec_tv.sh status
 ```
 
 ### 5. Reboot
+
 ```bash
 sudo reboot
 ```
 
 ***
 
-## Was nach dem Reboot passiert
+## Projektstruktur
 
 ```
-Boot
- └── systemd
-      ├── slideshow.service (After=network-online + remote-fs)
-      │    └── slideshow_fbi.sh
-      │         ├── find /mnt/smb-fotos …| shuf → Zufällige Reihenfolge
-      │         ├── fbi -T 2 -d /dev/fb0 -a -t 10
-      │         └── Loop: nach Durchlauf neu einlesen (=Cache-Check)
-      │
-      └── cron (user pi)
-           ├── 07:00 → cec_tv.sh on  (TV einschalten + Pi als aktive Quelle)
-           └── 17:00 → cec_tv.sh off (TV in Standby)
+pi-slideshow/
+├── install.sh              # Installationsscript (einmalig ausführen)
+├── config.env.example      # Konfigurationsvorlage (→ config.env kopieren)
+├── scripts/
+│   ├── slideshow_fbi.sh    # Slideshow (fbi, Framebuffer)
+│   └── cec_tv.sh           # TV per HDMI-CEC steuern
+├── .gitignore
+├── LICENSE
+└── README.md
 ```
 
 ***
 
-## HDMI-CEC Details
+## Boot-Chain
 
-### Was ist CEC?
+```
+Boot
+ └── systemd
+      ├── slideshow.service  (After=network-online + remote-fs)
+      │    └── slideshow_fbi.sh
+      │         ├── find /mnt/smb-fotos | shuf
+      │         ├── fbi -T 2 -d /dev/fb0 -a -t 10
+      │         └── Loop: nach Durchlauf Dateiliste neu laden
+      └── cron (user pi)
+           ├── HH:00 → cec_tv.sh on
+           └── HH:00 → cec_tv.sh off
+```
 
-HDMI-CEC (Consumer Electronics Control) ist ein Protokoll über die HDMI-Leitung, das Geräte gegenseitig steuern lässt – z.B. kann der Pi den TV einschalten, ohne zusätzliche Kabel oder IR-Blaster.
+***
 
-Jeder TV-Hersteller nennt es anders:
+## CEC
 
 | Hersteller | Name für CEC |
 |---|---|
@@ -132,118 +121,48 @@ Jeder TV-Hersteller nennt es anders:
 | Philips | EasyLink |
 | Panasonic | VIERA Link |
 
-**Am TV aktivieren:** Einstellungen → Bild/System → HDMI-CEC / Anynet+ / SimpLink → **Ein**
+Am TV aktivieren: *Einstellungen → System → HDMI-CEC → Ein*
 
-### CEC-Befehle
+> `hdmi_drive=2` in `/boot/config.txt` ist Pflicht für CEC – wird von `install.sh` automatisch gesetzt.
 
-```bash
-# TV einschalten
-echo "on 0" | cec-client -s -d 1
-
-# Pi als aktive Quelle setzen (TV wechselt auf HDMI-Eingang)
-echo "as" | cec-client -s -d 1
-
-# TV in Standby
-echo "standby 0" | cec-client -s -d 1
-
-# Stromstatus abfragen
-echo "pow 0" | cec-client -s -d 1
-
-# Alle CEC-Geräte im Bus scannen (zur Diagnose)
-echo "scan" | cec-client -s -d 1
-```
-
-### Kein CEC-fähiger TV?
-
-Kein Problem – der Slideshow-Service läuft völlig unabhängig von CEC. Die Cron-Jobs werden trotzdem ausgeführt, passiert aber einfach nichts. Sobald irgendwann ein CEC-fähiger TV angeschlossen wird, funktioniert es automatisch ohne weitere Änderungen.
-
-***
-
-## Cron-Zeiten anpassen
+### Cron-Zeiten anpassen
 
 ```bash
 crontab -e
 ```
 
-Aktuelle Einträge (Beispiel 07:00 / 17:00):
-```
-0 7  * * * /home/pi/scripts/cec_tv.sh on
-0 17 * * * /home/pi/scripts/cec_tv.sh off
-```
-
-Nur Wochentags (Mo–Fr):
+Beispiel nur Wochentags:
 ```
 0 7  * * 1-5 /home/pi/scripts/cec_tv.sh on
 0 17 * * 1-5 /home/pi/scripts/cec_tv.sh off
 ```
 
-Wochenende andere Zeiten:
-```
-0 7  * * 1-5 /home/pi/scripts/cec_tv.sh on
-0 17 * * 1-5 /home/pi/scripts/cec_tv.sh off
-0 9  * * 6,7 /home/pi/scripts/cec_tv.sh on
-0 22 * * 6,7 /home/pi/scripts/cec_tv.sh off
-```
-
 ***
 
-## Slideshow-Einstellungen
+## HDMI-Einstellungen
 
-In `slideshow_fbi.sh`:
-
-| Variable | Standard | Bedeutung |
-|---|---|---|
-| `SLIDESHOW_INTERVAL` | `10` | Sekunden pro Bild |
-| `MOUNT_POINT` | `/mnt/smb-fotos` | Pfad zum SMB-Mount |
-
-Änderungen nach dem ersten Setup übernehmen:
-```bash
-nano /home/pi/scripts/slideshow_fbi.sh
-sudo systemctl restart slideshow
-```
-
-***
-
-## HDMI-Einstellungen (`/boot/config.txt`)
-
-Das Setup setzt automatisch folgende Werte für HD Ready (1280×720):
+`install.sh` setzt automatisch für HD Ready (1280×720):
 
 ```ini
-hdmi_force_hotplug=1   # HDMI aktiv auch ohne erkannten Monitor
-hdmi_drive=2           # HDMI-Modus (kein DVI) – wichtig für CEC!
-hdmi_group=1           # CEA (TV-Standards)
-hdmi_mode=4            # 720p @ 60 Hz
+hdmi_force_hotplug=1
+hdmi_drive=2
+hdmi_group=1
+hdmi_mode=4      # 720p @ 60Hz – für Full HD: hdmi_mode=16
 ```
-
-> **Wichtig:** `hdmi_drive=2` ist Pflicht für CEC – im DVI-Modus (`hdmi_drive=1`) funktioniert CEC nicht.
-
-Für Full HD: `hdmi_mode=16` (1080p @ 60 Hz)
 
 ***
 
 ## Manuelle Befehle
 
 ```bash
-# Slideshow-Status
-sudo systemctl status slideshow
+sudo systemctl status slideshow     # Status
+sudo systemctl restart slideshow    # Neu starten
+journalctl -u slideshow -f          # Logs live
 
-# Slideshow neu starten
-sudo systemctl restart slideshow
-
-# Slideshow-Logs live
-journalctl -u slideshow -f
-
-# CEC-TV manuell steuern
-/home/pi/scripts/cec_tv.sh on
-/home/pi/scripts/cec_tv.sh off
-/home/pi/scripts/cec_tv.sh status
-/home/pi/scripts/cec_tv.sh scan
-
-# SMB-Mount manuell prüfen
-sudo mount -a && ls /mnt/smb-fotos
-
-# fbi direkt testen (aus SSH-Session)
-fbi -T 2 -d /dev/fb0 -a -noverbose -t 5 /mnt/smb-fotos/*.jpg
+/home/pi/scripts/cec_tv.sh scan     # CEC-Geräte anzeigen
+/home/pi/scripts/cec_tv.sh on       # TV ein
+/home/pi/scripts/cec_tv.sh off      # TV aus
+/home/pi/scripts/cec_tv.sh status   # TV-Status
 ```
 
 ***
@@ -253,9 +172,13 @@ fbi -T 2 -d /dev/fb0 -a -noverbose -t 5 /mnt/smb-fotos/*.jpg
 | Problem | Lösung |
 |---|---|
 | Schwarzer Bildschirm | `hdmi_force_hotplug=1` in `/boot/config.txt` prüfen |
-| CEC funktioniert nicht | `hdmi_drive=2` setzen, CEC am TV aktivieren, `cec_tv.sh scan` testen |
-| `fbi: cannot open framebuffer` | `sudo usermod -aG video pi` dann neu einloggen |
-| SMB-Mount fehlt | `journalctl -u systemd-networkd` – WLAN verbunden? |
-| Bilder laden nicht neu | Service neu starten: `sudo systemctl restart slideshow` |
-| TV schaltet bei Standby nicht aus | Pi muss aktive Quelle sein: `echo "as" \| cec-client -s -d 1` |
-| Cron läuft nicht | `crontab -l` prüfen, `journalctl -u cron` |
+| CEC funktioniert nicht | `hdmi_drive=2` setzen, CEC am TV aktivieren |
+| `fbi: cannot open framebuffer` | `sudo usermod -aG video pi`, neu einloggen |
+| SMB-Mount fehlt | WLAN verbunden? `journalctl -u systemd-networkd` |
+| Bilder nicht aktuell | `sudo systemctl restart slideshow` |
+
+***
+
+## Lizenz
+
+MIT – siehe [LICENSE](LICENSE)
