@@ -27,9 +27,10 @@ Der angeschlossene TV wird per HDMI-CEC automatisch ein- und ausgeschaltet.
 ### 1. Repo klonen
 
 ```bash
-git clone https://github.com/DEIN-USERNAME/pi-slideshow.git
-cd pi-slideshow
+git clone https://github.com/BratwurstPeter77/Raspi-Zero-SMB-Bilderrahmen-.git
+cd Raspi-Zero-SMB-Bilderrahmen-
 ```
+
 
 ### 2. Config anlegen
 
